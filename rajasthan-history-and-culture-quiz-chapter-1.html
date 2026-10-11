@@ -95,7 +95,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <div class="eyebrow">अध्याय 1 · राजस्थान का इतिहास : एक परिचय</div>
       <h1>राजस्थान इतिहास Quiz</h1>
     </div>
-    <p class="note">Every attempt draws <span id="nNote">20</span> random questions from your <span id="total">533</span> flashcards, with 4 options each. You can move between questions freely. When you submit, or when time runs out, you get your score and a review of every answer.</p>
+    <p class="note">Every attempt draws <span id="nNote">20</span> questions in random order from your <span id="total">533</span> flashcards, with 4 options each. You can move between questions freely. When you submit, or when time runs out, you get your score and a review of every answer.</p>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="eyebrow">Number of questions</div>
       <div class="chips" id="countChips">
@@ -104,6 +104,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
         <button class="chip" data-n="100" aria-pressed="false">100</button>
         <button class="chip" data-n="150" aria-pressed="false">150</button>
         <button class="chip" data-n="200" aria-pressed="false">200</button>
+        <button class="chip" data-n="0" aria-pressed="false">All (<span class="totalN">533</span>)</button>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -116,8 +117,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
         <button class="chip" data-min="30" aria-pressed="false">30 min</button>
         <button class="chip" data-min="60" aria-pressed="false">1 hour</button>
         <button class="chip" data-min="90" aria-pressed="false">1.5 hours</button>
+        <button class="chip" data-min="0" aria-pressed="false">Unlimited</button>
       </div>
-      <p class="note">Choosing a question count picks a matching time; you can change it.</p>
+      <p class="note">Choosing a question count picks a matching time; you can change it. With Unlimited, the clock counts up and nothing is submitted until you press Submit.</p>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="eyebrow">Negative marking</div>
@@ -219,15 +221,16 @@ let settings={n:20,min:10,neg:0}, qs=[], cur=0, endAt=0, startAt=0, tick=null, d
 try{ const s=JSON.parse(localStorage.getItem('rjq-settings')||'null'); if(s) settings=Object.assign(settings,s); }catch(e){}
 try{ const l=localStorage.getItem('rjq-last'); if(l) $('lastScore').textContent='Last attempt: '+l; }catch(e){}
 $('total').textContent=CARDS.length;
+document.querySelectorAll('.totalN').forEach(e=>e.textContent=CARDS.length);
 
 function syncChips(){
   document.querySelectorAll('#countChips .chip').forEach(b=>b.setAttribute('aria-pressed', String(+b.dataset.n===settings.n)));
-  $('nNote').textContent=settings.n;
+  $('nNote').textContent=settings.n?settings.n:'all '+CARDS.length;
   document.querySelectorAll('#timeChips .chip').forEach(b=>b.setAttribute('aria-pressed', String(+b.dataset.min===settings.min)));
   document.querySelectorAll('#negChips .chip').forEach(b=>b.setAttribute('aria-pressed', String(+b.dataset.neg===settings.neg)));
 }
 syncChips();
-const AUTO_TIME={20:10,50:30,100:60,150:90,200:90};
+const AUTO_TIME={20:10,50:30,100:60,150:90,200:90,0:0};
 $('countChips').onclick=e=>{const b=e.target.closest('.chip'); if(!b)return; settings.n=+b.dataset.n; settings.min=AUTO_TIME[settings.n]; syncChips(); save();};
 $('timeChips').onclick=e=>{const b=e.target.closest('.chip'); if(!b)return; settings.min=+b.dataset.min; syncChips(); save();};
 $('negChips').onclick=e=>{const b=e.target.closest('.chip'); if(!b)return; settings.neg=+b.dataset.neg; syncChips(); save();};
@@ -236,10 +239,11 @@ function save(){ try{localStorage.setItem('rjq-settings',JSON.stringify(settings
 function show(id){ ['start','quiz','result'].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
 
 function begin(cards){
-  const chosen = cards || shuffle(POOL).slice(0,Math.min(settings.n,POOL.length));
+  const chosen = cards || shuffle(POOL).slice(0, settings.n ? Math.min(settings.n,POOL.length) : POOL.length);
   qs = chosen.map(makeQ); cur=0; done=false;
   buildGrid(); render(); show('quiz');
-  startAt=Date.now(); endAt=startAt+settings.min*60000;
+  startAt=Date.now(); endAt = settings.min ? startAt+settings.min*60000 : Infinity;
+  $('timer').title = settings.min ? 'Time left' : 'Time taken (no limit)';
   clearInterval(tick); tick=setInterval(updTimer,250); updTimer();
 }
 $('begin').onclick=()=>begin();
@@ -249,6 +253,10 @@ function clock(s){
   return h ? `${h}:${String(m).padStart(2,'0')}:${x}` : `${String(m).padStart(2,'0')}:${x}`;
 }
 function updTimer(){
+  if(endAt===Infinity){ // unlimited: count up, never auto-submit
+    $('timer').textContent='⏱ '+clock(Math.floor((Date.now()-startAt)/1000));
+    $('timer').classList.remove('low'); return;
+  }
   const left=Math.max(0,endAt-Date.now()), s=Math.ceil(left/1000);
   $('timer').textContent=clock(s);
   $('timer').classList.toggle('low', s<=60);
